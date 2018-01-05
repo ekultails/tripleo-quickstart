@@ -127,7 +127,7 @@ file and ssh config given an access URL and credentials:
     vars:
       undercloud_user: centos
       ssh_user: centos
-      non_root_user: centos
+      provision_user: centos
       overcloud_user: centos
       inventory: openstack
       os_username: fuser

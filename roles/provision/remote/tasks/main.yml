@@ -38,24 +38,32 @@
 # will own the virtual infrastructure on which we deploy openstack.
 - name: Create non-root user
   user:
-    name: "{{ non_root_user }}"
+    name: "{{ provision_user }}"
     state: present
     shell: /bin/bash
   become: true
+  when: provision_user != "root"
 
-- name: Get the non-root user UID
-  command: "id {{ non_root_user }} -u"
-  register: non_root_user_uid_output
-  changed_when: false
+- block:
+    - name: Get the provision user UID
+      command: "id {{ provision_user }} -u"
+      register: provision_user_uid_output
+      changed_when: false
+    
+    - name: Save the provision user UID
+      set_fact:
+        user_uid: "{{ provision_user_uid_output.stdout }}"
+        cacheable: true
+  when: provision_user != "root"
 
-- name: Save the non-root user UID
+- name: Set the root provision user UID
   set_fact:
-    non_root_user_uid: "{{ non_root_user_uid_output.stdout }}"
-    cacheable: true
+    user_uid: 0
+  when: provision_user == "root"
 
 # Install the public component of `virt_host_key` in the
-# `.ssh/authorized_keys` file for the non-root user.
-- name: Configure non-root user authorized_keys
+# `.ssh/authorized_keys` file for the provision user.
+- name: Configure the provision user authorized_keys
   authorized_key:
     user: "{{ ssh_user }}"
     key: "{{ lookup('file', virt_host_key|quote + '.pub')|default('') }}"
@@ -67,15 +75,16 @@
     state: "present"
   become: true
 
-# This lets the non-root user access the `qemu://system` endpoint.  We
+# This lets the provision user access the `qemu://system` endpoint.  We
 # don't need this with the default configuration (which uses
 # `qemu://session`), but this permits things to work if someone
 # explicitly passes in `libvirt_uri`.
-- name: Grant libvirt privileges to non-root user
+- name: Grant libvirt privileges to the provision user
   template:
     src: libvirt.pkla.j2
-    dest: "/etc/polkit-1/localauthority/50-local.d/50-{{ non_root_user }}-libvirt.pkla"
+    dest: "/etc/polkit-1/localauthority/50-local.d/50-{{ provision_user }}-libvirt.pkla"
   become: true
+  when: provision_user != "root"
 
 - name: Ensure XDG_RUNTIME_DIR is set
   blockinfile:
@@ -88,22 +97,23 @@
           export XDG_RUNTIME_DIR="/run/user/${UID}"
       fi
   become: true
-  become_user: "{{ non_root_user }}"
+  become_user: "{{ provision_user }}"
 
 # I'm not always root, but when I am it's because of `sudo`.
-- name: Grant sudo privileges to non-root user
+- name: Grant sudo privileges to provision user
   copy:
     content: |
-      {{ non_root_user }} ALL=(ALL) NOPASSWD:ALL
-    dest: /etc/sudoers.d/{{ non_root_user }}
+      {{ provision_user }} ALL=(ALL) NOPASSWD:ALL
+    dest: /etc/sudoers.d/{{ provision_user }}
     owner: root
     group: root
     mode: 0440
   become: true
+  when: provision_user != "root"
 
 # This replaces the inventory entry for the virthost.  The original
 # entry had `ansible_user: root`, but from now on we will connect as
-# the non-root user.
+# the provision user.
 - name: Re-add the virthost to the inventory
   add_host:
     name: "{{ virthost }}"
@@ -120,7 +130,7 @@
   file:
     path: "{{ libvirt_volume_path }}"
     state: directory
-    owner: "{{ non_root_user }}"
-    group: "{{ non_root_group }}"
+    owner: "{{ provision_user }}"
+    group: "{{ provision_group }}"
   become: true
 

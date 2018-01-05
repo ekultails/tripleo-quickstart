@@ -5,15 +5,17 @@ local_working_dir: "{{ lookup('env', 'HOME') }}/.quickstart"
 
 # this will define the user that ansible will connect with
 ssh_user: stack
+ssh_user_home: "/home/{{ ssh_user }}"
 
 # This defines the users that deploys the overcloud from the undercloud
 # and accesses overcloud as the orchestration admin user
 undercloud_user: stack
+undercloud_user_home: "/home/{{ undercloud_user }}"
 overcloud_user: heat-admin
 
 # This is where we store generated artifacts (like ssh config files,
 # keys, deployment scripts, etc) on the undercloud.
-working_dir: "/home/{{ undercloud_user }}"
+working_dir: "{{ undercloud_user_home }}"
 
 # This is a directory no the virthost in which we store the downloaded
 # undercloud image.
@@ -197,21 +199,23 @@ devmode: false
 tuned_profile: 'virtual-host'
 
 # This is the name of the user the `provision` role will create on the
-# remote host.
+# remote host. The "non_root_user" is used for backwards compatibility
+# because deploying as the "root" user is now supported.
 non_root_user: stack
-non_root_group: "{{ non_root_user }}"
+provision_user: "{{ non_root_user }}"
+provision_group: "{{ provision_user }}"
 
 # Path for volume storage
 libvirt_volume_path: "{{ working_dir }}/pool"
 
 libvirt_uri: qemu:///session
 
-# Whether to give permissive access to files owned by the non_root_user.
-# This is required if the non_root_user is not used to run libvirt tasks.
+# Whether to give permissive access to files owned by the provision_user.
+# This is required if the provision_user is not used to run libvirt tasks.
 # The most common case for this is when openvswitch is used for networks
 # on the virthost. This requires running libvirt tasks as the root user so
 # that they have sufficient privileges to connect to ovs bridges.
-non_root_chown: false
+provision_user_chown: false
 
 # Enable port forwarding for tripleo-ui access
 # It is safe to mark this as default true as it only runs on a virthost
